@@ -184,6 +184,10 @@ if (configString) {
   if (configJSON.oidc) {
     props.oidc = configJSON.oidc;
   }
+
+  if (configJSON.enableGoogleCloudAdapter) {
+    props.enableGoogleCloudAdapter = configJSON.enableGoogleCloudAdapter;
+  }
 }
 
 var app = React.createElement(App, props, null);

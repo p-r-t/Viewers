@@ -13,16 +13,12 @@ import OHIFVTKExtension from 'ohif-vtk-extension';
 import OHIFDicomPDFExtension from 'ohif-dicom-pdf-extension';
 import OHIFDicomHtmlExtension from 'ohif-dicom-html-extension';
 import OHIFDicomMicroscopyExtension from 'ohif-dicom-microscopy-extension';
-import {
-  loadUser,
-  OidcProvider,
-  createUserManager,
-  reducer as oidcReducer
-} from 'redux-oidc';
+import { OidcProvider, reducer as oidcReducer } from 'redux-oidc';
 import cornerstoneWADOImageLoader from 'cornerstone-wado-image-loader';
-
+import GCloudAdapter from './googleCloud/GCloudAdapter';
+import loadHealthcareApiAdapter from './googleCloud/loadHealthcareApiAdapter.js';
+import handleOIDC from './handleOIDC';
 const { ExtensionManager } = OHIF.extensions;
-
 const Icons = 'icons.svg';
 
 const { reducers, localStorage } = OHIF.redux;
@@ -163,35 +159,6 @@ function handleServers(servers) {
   }
 }
 
-function handleOIDC(oidc) {
-  if (!oidc) {
-    return;
-  }
-
-  const oidcClient = oidc[0];
-
-  const settings = {
-    authority: oidcClient.authServerUrl,
-    client_id: oidcClient.clientId,
-    redirect_uri: oidcClient.authRedirectUri,
-    silent_redirect_uri: '/silent-refresh.html',
-    post_logout_redirect_uri: oidcClient.postLogoutRedirectUri,
-    response_type: oidcClient.responseType,
-    scope: 'email profile openid', // Note: Request must have scope 'openid' to be considered an OpenID Connect request
-    automaticSilentRenew: true,
-    revokeAccessTokenOnSignout: true,
-    filterProtocolClaims: true,
-    loadUserInfo: true,
-    extraQueryParams: oidcClient.extraQueryParams
-  };
-
-  const userManager = createUserManager(settings);
-
-  loadUser(store, userManager);
-
-  return userManager;
-}
-
 function handleWebWorkerInit(basename) {
   const config = {
     maxWebWorkers: Math.max(navigator.hardwareConcurrency - 1, 1),
@@ -238,21 +205,47 @@ class App extends Component {
     routerBasename: PropTypes.string,
     rootUrl: PropTypes.string,
     userManager: PropTypes.object,
-    location: PropTypes.object
+    location: PropTypes.object,
+    enableGoogleCloudAdapter: PropTypes.bool.isRequired
   };
 
   static defaultProps = {
-    whiteLabelling: {}
+    whiteLabelling: {},
+    enableGoogleCloudAdapter: false
   };
 
   constructor(props) {
     super(props);
 
-    this.userManager = handleOIDC(this.props.oidc);
+    let oidc = this.props.oidc;
+    if (this.props.enableGoogleCloudAdapter) {
+      loadHealthcareApiAdapter();
+      oidc[0] = Object.assign({}, this.props.oidc[0], {
+        scope:
+          'email profile openid https://www.googleapis.com/auth/cloud-platform.read-only https://www.googleapis.com/auth/cloud-healthcare'
+      });
+
+      oidc[0].authRedirectUri = this.props.rootUrl + oidc[0].authRedirectUri;
+    }
+
+    this.userManager = handleOIDC(oidc, store);
     handleServers(this.props.servers);
     handleWebWorkerInit(this.props.rootUrl);
     updateBaseTag(this.props.rootUrl);
   }
+
+  onSilentRenewError = error => {
+    console.error(error);
+
+    const LOGIN_REQUIRED = 'login_required';
+    if (error.error === LOGIN_REQUIRED) {
+      OHIF.user.logout();
+    }
+  };
+
+  onAccessTokenExpired = () => {
+    OHIF.user.logout();
+  };
 
   render() {
     const userManager = this.userManager;
@@ -260,7 +253,12 @@ class App extends Component {
     if (userManager) {
       return (
         <Provider store={store}>
-          <OidcProvider store={store} userManager={userManager}>
+          <OidcProvider
+            store={store}
+            userManager={userManager}
+            onSilentRenewError={this.onSilentRenewError}
+            onAccessTokenExpired={this.onAccessTokenExpired}
+          >
             <BrowserRouter basename={this.props.routerBasename}>
               <WhiteLabellingContext.Provider value={this.props.whiteLabelling}>
                 <OHIFStandaloneViewer userManager={userManager} />

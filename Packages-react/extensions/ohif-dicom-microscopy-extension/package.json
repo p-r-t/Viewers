@@ -78,6 +78,7 @@
   "dependencies": {
     "@babel/runtime": "^7.2.0",
     "classnames": "^2.2.6",
-    "dicom-microscopy-viewer": "^0.2.0"
+    "dicom-microscopy-viewer": "file:.yalc/dicom-microscopy-viewer",
+    "dicomweb-client": "file:.yalc/dicomweb-client"
   }
 }

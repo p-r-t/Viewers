@@ -92,6 +92,7 @@
     "@babel/runtime": "^7.2.0",
     "classnames": "^2.2.6",
     "lodash.throttle": "^4.1.1",
+    "ohif-core": "file:.yalc/ohif-core",
     "react-cornerstone-viewport": "^0.1.23"
   }
 }
