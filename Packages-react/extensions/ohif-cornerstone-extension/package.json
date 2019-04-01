@@ -25,6 +25,7 @@
     "cornerstone-wado-image-loader": "^2.2.3",
     "dcmjs": "^0.3.8",
     "dicom-parser": "^1.8.3",
+    "dicomweb-client": "file:.yalc/dicomweb-client",
     "hammerjs": "^2.0.8",
     "ohif-core": "^0.3.5",
     "prop-types": "^15.6.2",
@@ -91,6 +92,7 @@
   "dependencies": {
     "@babel/runtime": "^7.2.0",
     "classnames": "^2.2.6",
+    "dicomweb-client": "file:.yalc/dicomweb-client",
     "lodash.throttle": "^4.1.1",
     "ohif-core": "file:.yalc/ohif-core",
     "react-cornerstone-viewport": "^0.1.23"
