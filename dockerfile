@@ -1,51 +1,48 @@
-# First stage of multi-stage build
-# Installs Meteor and builds node.js version
-# This stage is named 'builder'
-# The data for this intermediary image is not included
-# in the final image.
-FROM node:8.10.0-slim as builder
+# This dockerfile is used to publish the `ohif/viewer` image on dockerhub.
+#
+# It's a good example of how to build our static application and package it
+# with a web server capable of hosting it as static content.
+#
+# docker build
+# --------------
+# If you would like to use this dockerfile to build and tag an image, make sure
+# you set the context to the project's root directory:
+# https://docs.docker.com/engine/reference/commandline/build/
+#
+#
+# SUMMARY
+# --------------
+# This dockerfile has two stages:
+#
+# 1. Building the React application for production
+# 2. Setting up our Nginx (Alpine Linux) image w/ step one's output
+#
 
-# Fix build now that jessie-updates has been archived
-RUN sed -i '/jessie-updates/d' /etc/apt/sources.list
-RUN apt-get update && apt-get install -y \
-	curl \
-	g++ \
-	git \
-	python \
-	build-essential
 
-RUN curl https://install.meteor.com/ | sh
+# Stage 1: Build the application
+# docker build -t ohif/viewer:latest .
+FROM node:11.2.0-slim as builder
 
-# Create a non-root user
-RUN useradd -ms /bin/bash user
-USER user
-RUN mkdir /home/user/Viewers
-COPY OHIFViewer/package.json /home/user/Viewers/OHIFViewer/
-ADD --chown=user:user . /home/user/Viewers
+# RUN apt-get update && apt-get install -y git yarn
+RUN mkdir /usr/src/app
+WORKDIR /usr/src/app
 
-WORKDIR /home/user/Viewers/OHIFViewer
+ENV PATH /usr/src/app/node_modules/.bin:$PATH
+ENV GENERATE_SOURCEMAP=false
 
-ENV METEOR_PACKAGE_DIRS=../Packages
-ENV METEOR_PROFILE=1
-RUN meteor npm install
-RUN meteor build --directory /home/user/app
-WORKDIR /home/user/app/bundle/programs/server
-RUN npm install --production
+COPY package.json /usr/src/app/package.json
+COPY yarn.lock /usr/src/app/yarn.lock
 
-# Second stage of multi-stage build
-# Creates a slim production image for the node.js application
-FROM node:8.10.0-slim
+ADD . /usr/src/app/
+RUN yarn install
+RUN yarn run build:web
 
-RUN npm install -g pm2
-
-WORKDIR /app
-COPY --from=builder /home/user/app .
-COPY dockersupport/app.json .
-
-ENV ROOT_URL http://localhost:3000
-ENV PORT 3000
-ENV NODE_ENV production
-
-EXPOSE 3000
-
-CMD ["pm2-runtime", "app.json"]
+# Stage 2: Bundle the built application into a Docker container
+# which runs Nginx using Alpine Linux
+FROM nginx:1.15.5-alpine
+RUN rm -rf /etc/nginx/conf.d
+COPY docker/Viewer-v2.x /etc/nginx/conf.d
+COPY --from=builder /usr/src/app/build /usr/share/nginx/html
+EXPOSE 80
+EXPOSE 443
+CMD ["nginx", "-g", "daemon off;"]
